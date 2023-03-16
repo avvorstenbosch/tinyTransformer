@@ -169,11 +169,14 @@ class MultiHeadAttenionBlock(nn.Module):
         head_size = n_embed // n_head
         self.mhsa = MultiHead(num_heads=n_head, head_size=head_size)
         self.fforward = FeedForward()
+        # This layer normalization acts on a per token level (on H)
+        self.layernorm1 = nn.LayerNorm(n_embed)
+        self.layernorm2 = nn.LayerNorm(n_embed)
 
     def forward(self, x):
         # Our forward pass has 2 skip connections implemented
-        x = x + self.mhsa(x)  # (B, T, H)
-        x = x + self.fforward(x)
+        x = x + self.mhsa(self.layernorm1(x))  # (B, T, H)
+        x = x + self.fforward(self.layernorm2(x))
         return x
 
 
@@ -187,6 +190,7 @@ class tinyTransformer(nn.Module):
         blocks = [MultiHeadAttenionBlock() for _ in range(n_blocks)]
         self.mhsab = nn.Sequential(*blocks)
         self.lm_head = nn.Linear(head_size, vocab_size)
+        self.layernorm = nn.LayerNorm(n_embed)
 
     def forward(self, idx, targets=None):
         B, T = idx.shape  # (B: Batch_size, T: Block_size)
@@ -200,6 +204,7 @@ class tinyTransformer(nn.Module):
         # For every sample from the batch, we broadcast the position embedding
         x = token_embed + position_embed  # (B, T, C)
         x = self.mhsab(x)  # (B, T, C)
+        x = self.layernorm(x)
         logits = self.lm_head(x)  # (B, T, vocab_size)
 
         if targets is None:
