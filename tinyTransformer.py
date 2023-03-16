@@ -124,9 +124,12 @@ class MultiHead(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList(Head(head_size) for _ in range(num_heads))
+        self.projection = nn.Linear(n_embed, n_embed)
 
     def forward(self, x):
-        return torch.cat([h(x) for h in self.heads], dim=-1)
+        x = torch.cat([h(x) for h in self.heads], dim=-1)
+        x = self.projection(x)
+        return x
 
 
 class FeedForward(nn.Module):
@@ -136,14 +139,20 @@ class FeedForward(nn.Module):
 
     def __init__(self, n_layers=1):
         super().__init__()
-        layers = []
-        for layer in range(n_layers):
+        layers = [
+            nn.Linear(n_embed, 4 * n_embed),
+            nn.ReLU(),
+        ]
+        for layer in range(n_layers - 1):
             layers.extend(
                 [
-                    nn.Linear(n_embed, n_embed),
+                    nn.Linear(4 * n_embed, 4 * n_embed),
                     nn.ReLU(),
                 ]
             )
+        layers.append(
+            nn.Linear(4 * n_embed, n_embed)
+        )  # Add projection for skip-connection
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -162,8 +171,9 @@ class MultiHeadAttenionBlock(nn.Module):
         self.fforward = FeedForward()
 
     def forward(self, x):
-        x = self.mhsa(x)  # (B, T, H)
-        x = self.fforward(x)
+        # Our forward pass has 2 skip connections implemented
+        x = x + self.mhsa(x)  # (B, T, H)
+        x = x + self.fforward(x)
         return x
 
 
