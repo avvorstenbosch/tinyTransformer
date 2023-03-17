@@ -3,17 +3,17 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 # Hyperparameters
-batch_size = 128  # How many independent sequences will we process in parallel?
-block_size = 64  # What is the maximum context length for predictions?
-max_iters = 5000  # How many training steps will we take?
-eval_interval = 500  # How often will we print results for training?
-learning_rate = 1e-3  # What is our learning rate?
+batch_size = 512  # How many independent sequences will we process in parallel?
+block_size = 256  # What is the maximum context length for predictions?
+max_iters = 25000  # How many training steps will we take?
+eval_interval = 250  # How often will we print results for training?
+learning_rate = 1e-4  # What is our learning rate?
 device = "cuda" if torch.cuda.is_available() else "cpu"  # Where will we train?
 eval_iters = 200  # How many samples to use to estimate loss?
-n_embed = 64  # How many dimensions do our embeddings have?
+n_embed = 64 * 4  # How many dimensions do our embeddings have?
 head_size = n_embed  # How many dimensions do Key, Query and Value get?
 n_head = 8  # How many self-attention head does a multiheaded self attention block get?
-n_blocks = 4  # How many sequential self-attention blocks does our model get?
+n_blocks = 8  # How many sequential self-attention blocks does our model get?
 # ------------
 
 torch.manual_seed(1337)
@@ -260,3 +260,17 @@ for iter in range(max_iters):
 # generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
 print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
+
+
+def prompt(input):
+    """
+    Given your own prompt, generate a text.
+    """
+    context = torch.tensor(encode(input), dtype=torch.long, device=device).reshape(
+        1, -1
+    )
+    print(decode(m.generate(context, max_new_tokens=256)[0].tolist()))
+
+
+# save model
+torch.save(m.state_dict(), "./models/tinyTransformer1.0.torch")
