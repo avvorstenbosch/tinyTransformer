@@ -1,16 +1,19 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from utils.BPE import BPETokenizer
+import os
+import pickle
 
 # Hyperparameters
-batch_size = 512  # How many independent sequences will we process in parallel?
+batch_size = 128  # How many independent sequences will we process in parallel?
 block_size = 256  # What is the maximum context length for predictions?
-max_iters = 25000  # How many training steps will we take?
+max_iters = 10000  # How many training steps will we take?
 eval_interval = 250  # How often will we print results for training?
 learning_rate = 1e-4  # What is our learning rate?
 device = "cuda" if torch.cuda.is_available() else "cpu"  # Where will we train?
 eval_iters = 200  # How many samples to use to estimate loss?
-n_embed = 64 * 4  # How many dimensions do our embeddings have?
+n_embed = 64 * 8  # How many dimensions do our embeddings have?
 head_size = n_embed  # How many dimensions do Key, Query and Value get?
 n_head = 8  # How many self-attention head does a multiheaded self attention block get?
 n_blocks = 8  # How many sequential self-attention blocks does our model get?
@@ -18,12 +21,13 @@ n_blocks = 8  # How many sequential self-attention blocks does our model get?
 
 torch.manual_seed(1337)
 
+print("Fetching data...")
 # get dataset
 paths = os.listdir("./data/maarten/")
 files = []
 for path in paths:
     with open("./data/maarten/" + path, "r") as file:
-        files.append(file.read())
+        files.append(file.read().lower())
 
 dataset = ""
 for file in files:
@@ -32,25 +36,24 @@ for file in files:
 
 # here are all the unique characters that occur in this text
 chars = sorted(list(set(dataset)))
-vocab_size = len(chars)
 
 # create a mapping from characters to integers
 stoi = {ch: i for i, ch in enumerate(chars)}
 itos = {i: ch for i, ch in enumerate(chars)}
 
+# Load tokenizer
+print("Loading BPETokenizer...")
+with open("./utils/BPE.pickle", "rb") as f:
+    vocab = pickle.load(f)
+    rules = pickle.load(f)
 
-def encode(s):
-    return [stoi[c] for c in s]  # encoder: take a string, output a list of integers
+tokenizer = BPETokenizer(vocab, rules)
+vocab_size = len(tokenizer.vocab)
 
 
-def decode(l):
-    return "".join(
-        [itos[i] for i in l]
-    )  # decoder: take a list of integers, output a string
-
-
+print("Encode Dataset...")
 # Train and test splits
-data = torch.tensor(encode(dataset), dtype=torch.long)
+data = torch.tensor(tokenizer.encode(dataset), dtype=torch.long)
 n = int(0.9 * len(data))  # first 90% will be train, rest val
 train_data = data[:n]
 val_data = data[n:]
@@ -180,7 +183,7 @@ class MultiHeadAttenionBlock(nn.Module):
         return x
 
 
-# super simple bigram model
+# simple GPT-like model, except it's trainable on a single consumer-grade GPU.
 class tinyTransformer(nn.Module):
     def __init__(self):
         super().__init__()
@@ -233,6 +236,7 @@ class tinyTransformer(nn.Module):
         return idx
 
 
+print("Training Model...")
 model = tinyTransformer()
 m = model.to(device)
 
@@ -245,7 +249,13 @@ for iter in range(max_iters):
     if iter % eval_interval == 0:
         losses = estimate_loss()
         print(
-            f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
+            f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}\n\n"
+        )
+        context = torch.zeros((1, 1), dtype=torch.long, device=device)
+        print(f"Generative output at step {iter}:")
+        print(
+            tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist())
+            + "\n\n"
         )
 
     # sample a batch of data
@@ -258,18 +268,20 @@ for iter in range(max_iters):
     optimizer.step()
 
 # generate from the model
+print("Finished training...")
+print(f"Generative output after training:")
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
+print(tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist()))
 
 
 def prompt(input):
     """
     Given your own prompt, generate a text.
     """
-    context = torch.tensor(encode(input), dtype=torch.long, device=device).reshape(
-        1, -1
-    )
-    print(decode(m.generate(context, max_new_tokens=256)[0].tolist()))
+    context = torch.tensor(
+        tokenizer.encode(input), dtype=torch.long, device=device
+    ).reshape(1, -1)
+    print(tokenizer.decode(m.generate(context, max_new_tokens=256)[0].tolist()))
 
 
 # save model
