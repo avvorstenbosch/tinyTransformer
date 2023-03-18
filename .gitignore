@@ -130,3 +130,9 @@ dmypy.json
 
 # Ignore the data repository
 /data
+
+# Ignore pytorch models
+*.torch
+
+# Ignore pickles
+*.pickle
