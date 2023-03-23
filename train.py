@@ -23,7 +23,7 @@ n_embed = 64 * 8  # How many dimensions do our embeddings have?
 head_size = n_embed  # How many dimensions do Key, Query and Value get?
 n_head = 8  # How many self-attention head does a multiheaded self attention block get?
 n_blocks = 8  # How many sequential self-attention blocks does our model get?
-model_precision = bfloat16  # Do you want to set the model_precision to float16 to be faster and reduce the memory?
+model_precision = torch.bfloat16  # Do you want to set the model_precision to float16 to be faster and reduce the memory?
 compile = True  # Do you want to compile the model in Pytorch 2.0 to be faster?
 # -----------------------------------------------------------------------------------#
 #                                 Training settings                                  #
@@ -31,8 +31,8 @@ compile = True  # Do you want to compile the model in Pytorch 2.0 to be faster?
 device = "cuda" if torch.cuda.is_available() else "cpu"  # Where will we train?
 model_precision = (
     nullcontext()
-    if device_type == "cpu"
-    else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+    if device == "cpu"
+    else torch.amp.autocast(device_type=device, dtype=model_precision)
 )
 # Set random seed for
 torch.manual_seed(2112)
@@ -40,7 +40,7 @@ torch.manual_seed(2112)
 precision = (
     nullcontext()
     if device_type == "cpu"
-    else torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
+    else torch.amp.autocast(device_type=device_type, dtype=model_precision)
 )
 # -----------------------------------------------------------------------------------#
 # collect all relevant model creation parameters
