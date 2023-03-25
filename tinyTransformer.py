@@ -6,17 +6,18 @@ import os
 import pickle
 
 # Hyperparameters
-batch_size = 128  # How many independent sequences will we process in parallel?
+batch_size = 512  # How many independent sequences will we process in parallel?
 block_size = 256  # What is the maximum context length for predictions?
-max_iters = 10000  # How many training steps will we take?
+max_iters = 100000  # How many training steps will we take?
 eval_interval = 250  # How often will we print results for training?
-learning_rate = 1e-4  # What is our learning rate?
+learning_rate = 3e-4  # What is our learning rate?
 device = "cuda" if torch.cuda.is_available() else "cpu"  # Where will we train?
 eval_iters = 200  # How many samples to use to estimate loss?
-n_embed = 64 * 8  # How many dimensions do our embeddings have?
+n_head = 4  # How many self-attention head does a multiheaded self attention block get?
+n_embed = 64 * n_head  # How many dimensions do our embeddings have?
 head_size = n_embed  # How many dimensions do Key, Query and Value get?
-n_head = 8  # How many self-attention head does a multiheaded self attention block get?
-n_blocks = 8  # How many sequential self-attention blocks does our model get?
+n_blocks = 6  # How many sequential self-attention blocks does our model get?
+dropout_percentage = 0.2  # What is de P of dropping out a node?
 # ------------
 
 torch.manual_seed(1337)
@@ -49,7 +50,6 @@ with open("./utils/BPE.pickle", "rb") as f:
 
 tokenizer = BPETokenizer(vocab, rules)
 vocab_size = len(tokenizer.vocab)
-
 
 print("Encode Dataset...")
 # Train and test splits
@@ -95,6 +95,7 @@ class Head(nn.Module):
         self.Query = nn.Linear(n_embed, head_size, bias=False)
         # Please note: The head size for the value layer is allowed to be different in size
         self.Value = nn.Linear(n_embed, head_size, bias=False)
+        self.dropout = nn.Dropout(dropout_percentage)
 
         # register_buffer signals to Torch that this is an externally fed object, not to be optimised
         self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
@@ -112,6 +113,7 @@ class Head(nn.Module):
         # Normalize results from the previously seen tokens
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float("-inf"))
         wei = F.softmax(wei, dim=-1)
+        wei = self.dropout(wei)
 
         # Extract value using query result.
         v = self.Value(x)
@@ -128,10 +130,12 @@ class MultiHead(nn.Module):
         super().__init__()
         self.heads = nn.ModuleList(Head(head_size) for _ in range(num_heads))
         self.projection = nn.Linear(n_embed, n_embed)
+        self.dropout = nn.Dropout(dropout_percentage)
 
     def forward(self, x):
         x = torch.cat([h(x) for h in self.heads], dim=-1)
         x = self.projection(x)
+        x = self.dropout(x)
         return x
 
 
@@ -153,8 +157,8 @@ class FeedForward(nn.Module):
                     nn.ReLU(),
                 ]
             )
-        layers.append(
-            nn.Linear(4 * n_embed, n_embed)
+        layers.extend(
+            [nn.Linear(4 * n_embed, n_embed), nn.Dropout(dropout_percentage)]
         )  # Add projection for skip-connection
         self.net = nn.Sequential(*layers)
 
@@ -242,6 +246,7 @@ m = model.to(device)
 
 # create a PyTorch optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.6)
 
 for iter in range(max_iters):
 
@@ -266,6 +271,8 @@ for iter in range(max_iters):
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step()
+    if iter % (12 * eval_interval) == 0:
+        scheduler.step()
 
 # generate from the model
 print("Finished training...")
