@@ -4,11 +4,13 @@ from collections import defaultdict
 import pickle
 
 # Hyperparameters
-LENGTH_VOCAB = 2**12  # How long is the vocab?
+LENGTH_VOCAB = 2**10  # How long is the vocab?
 SPECTOKENS = ["<|END|>", "<|W|>", "\n"]
 # How do we find pre-tokens?
 PATTERN = "|".join(re.escape(token) for token in SPECTOKENS) + "|" + r"\b\w+\b|[^\w\s]"
 ANTI_PATTERN_WORD = "|".join(re.escape(token) for token in SPECTOKENS) + "|[^\w\s]"
+PATTERN_WHITESPACE = r"\s+([^\w\s])"
+re_pattern_whitespace = re.compile(PATTERN_WHITESPACE)
 # ------------
 
 
@@ -45,42 +47,45 @@ class BPETokenizer:
         self.stoi = {ch: i for i, ch in enumerate(vocab)}
         self.itos = {i: ch for i, ch in enumerate(vocab)}
 
-    def merge_tokens(self, text, rule):
-        text_out = []
-        bigram = re.escape(" ".join(rule))
-        p = re.compile(r"(?<!\S)" + bigram + r"(?!\S)")
-        for word in text:
-            w_out = p.sub("".join(rule), word)
-            text_out.append(w_out)
+    def merge_tokens(self, text):
+        # Apply all the merger rules to the corpus
+        text_out = " <|JOIN|> ".join(text)
+        for rule in self.encode_rules:
+            bigram = re.escape(" ".join(rule))
+            p = re.compile(r"(?<!\S)" + bigram + r"(?!\S)")
+            rep_old = "".join([" ", " ".join(rule), " "])
+            rep_new = "".join([" ", "".join(rule), " "])
+            text_out = text_out.replace(rep_old, rep_new)
+            # Originally we use re.sub, but replace is a lot faster.
+            # text_out = p.sub("".join(rule), " <|JOIN|> ".join(text))
+        text_out = text_out.split(" <|JOIN|> ")
         return text_out
 
     def encode(self, s):
         # Pre-tokenize
         text = re.findall(PATTERN, s)
-        text = [
-            " ".join(word) + " <|W|>"
+        text = map(
+            lambda word: "".join([" ".join(word), " <|W|>"])
             if not re.search(ANTI_PATTERN_WORD, word)
-            else word
-            for word in text
-        ]
+            else word,
+            text,
+        )
 
         # Apply BPE rules:
-        for rule in self.encode_rules:
-            text = self.merge_tokens(text, rule)
+        text = self.merge_tokens(text)
 
         text = " ".join(text)  # flatten list
         text = text.split(" ")  # split into tokens
 
-        return [
-            self.stoi[c] for c in text
-        ]  # encoder: take a string, output a list of integers
+        return list(
+            map(self.stoi.get, text)
+        )  # encoder: take a string, output a list of integers
 
     def decode(self, l):
         # decoder: take a list of integers, output a string
         s = "".join([self.itos[i] for i in l]).replace("<|W|>", " ")
         # remove whitespaces before punctuation
-        pattern_whitespace = r"\s+([^\w\s])"
-        return re.sub(pattern_whitespace, r"\1", s)
+        return re_pattern_whitespace.sub(r"\1", s)
 
 
 if __name__ == "__main__":
