@@ -276,7 +276,7 @@ for iter in range(max_iters):
 
 # generate from the model
 print("Finished training...")
-print(f"Generative output after training:")
+print("Generative output after training:")
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
 print(tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist()))
 

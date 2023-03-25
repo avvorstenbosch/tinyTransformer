@@ -51,12 +51,12 @@ class BPETokenizer:
         # Apply all the merger rules to the corpus
         text_out = " <|JOIN|> ".join(text)
         for rule in self.encode_rules:
-            bigram = re.escape(" ".join(rule))
-            p = re.compile(r"(?<!\S)" + bigram + r"(?!\S)")
             rep_old = "".join([" ", " ".join(rule), " "])
             rep_new = "".join([" ", "".join(rule), " "])
             text_out = text_out.replace(rep_old, rep_new)
             # Originally we use re.sub, but replace is a lot faster.
+            # bigram = re.escape(" ".join(rule))
+            # p = re.compile(r"(?<!\S)" + bigram + r"(?!\S)")
             # text_out = p.sub("".join(rule), " <|JOIN|> ".join(text))
         text_out = text_out.split(" <|JOIN|> ")
         return text_out
@@ -81,9 +81,9 @@ class BPETokenizer:
             map(self.stoi.get, text)
         )  # encoder: take a string, output a list of integers
 
-    def decode(self, l):
+    def decode(self, Inputs):
         # decoder: take a list of integers, output a string
-        s = "".join([self.itos[i] for i in l]).replace("<|W|>", " ")
+        s = "".join([self.itos[i] for i in Inputs]).replace("<|W|>", " ")
         # remove whitespaces before punctuation
         return re_pattern_whitespace.sub(r"\1", s)
 
