@@ -6,33 +6,39 @@ import torch
 from utils.BPE import BPETokenizer
 from utils.save import get_savefile_name
 from utils.config import Config
+from utils.logging import setup_logger
 from tinyTransformer import tinyTransformer
 
+logger = setup_logger(__name__)
 # -----------------------------------------------------------------------------------#
 #                                 Hyperparameters                                    #
 # -----------------------------------------------------------------------------------#
 torch.manual_seed(2112)
 config = Config(
-    batch_size=256,  # How many independent sequences will we process in parallel?
-    block_size=256,  # What is the maximum context length for predictions?
-    n_head=6,  # How many self-attention head does a multiheaded self attention block get?
+    batch_size=128,  # How many independent sequences will we process in parallel?
+    block_size=512,  # What is the maximum context length for predictions?
+    n_head=4,  # How many self-attention head does a multiheaded self attention block get?
     n_embed=None,  # How many dimensions do our embeddings have?
-    n_blocks=4,  # How many sequential self-attention blocks does our model get?
+    n_blocks=6,  # How many sequential self-attention blocks does our model get?
     epochs=30,  # For how many epochs will we train the model?
     steps_per_epoch=10000,  # How many training steps will we take per Epoch?
     eval_interval=1000,  # How often will we print results for training?
-    learning_rate=1e-4,  # What is our learning rate?
-    eval_iters=200,  # How many samples to use to estimate loss?
-    model_precision=(
-        torch.bfloat16
-    ),  # Do you want to set the model_precision to float16 to be faster and reduce the memory?
+    learning_rate=1e-3,  # What is our learning rate?
+    eval_iters=100,  # How many samples to use to estimate loss?
+    model_precision=torch.bfloat16,  # Do you want to run mixed_precision?
     compile=True,  # Do you want to compile the model in Pytorch 2.0 to be faster?
-    testrun=False,
+    testrun=True,
     out_dir="./models/",
     device="cuda" if torch.cuda.is_available() else "cpu",  # Where will we train?
     # Set random seed for
     # Set the processing precision of the model: Either float32 or bfloat16
-    precision=None,  # defaults to bfloat.16
+    dropout_percentage=0.3,
+)
+logger.info(
+    "Config settings:\n\t\t\t\t"
+    + ",\n\t\t\t\t".join(
+        f"{key}={str(value)}" for key, value in config.__dict__.items()
+    ),
 )
 
 # -----------------------------------------------------------------------------------#
@@ -41,7 +47,7 @@ config = Config(
 # -----------------------------------------------------------------------------------#
 #                                 Load training data                                 #
 # -----------------------------------------------------------------------------------#
-print("Fetching data...")
+logger.info("Loading the dataset for processing.")
 # get dataset
 paths = os.listdir("./data/maarten/")
 files = []
@@ -49,6 +55,7 @@ for path in paths:
     with open("./data/maarten/" + path, "r") as file:
         files.append(file.read().lower())
 
+logger.info("Concatenating dataset into a single string for easy handling.")
 dataset = ""
 length_dataset = len(files) if not config.testrun else 3
 for file in files[:length_dataset]:
@@ -66,7 +73,7 @@ stoi = {ch: i for i, ch in enumerate(chars)}
 itos = {i: ch for i, ch in enumerate(chars)}
 
 # Load pretrained tokenizer
-print("Loading BPETokenizer...")
+logger.info("Loading pretrained BPETokenizer.")
 with open("./utils/BPE.pickle", "rb") as f:
     vocab = pickle.load(f)
     rules = pickle.load(f)
@@ -74,7 +81,7 @@ with open("./utils/BPE.pickle", "rb") as f:
 tokenizer = BPETokenizer(vocab, rules)
 vocab_size = len(tokenizer.vocab)
 
-print("Encode Dataset...")
+logger.info("Encoding dataset with BPETokenizer.")
 # Train and test splits
 data = torch.tensor(tokenizer.encode(dataset), dtype=torch.long)
 n = int(0.9 * len(data))  # first 90% will be train, rest val
@@ -96,16 +103,19 @@ def get_batch(split):
 #                                  Load and set model                                #
 # -----------------------------------------------------------------------------------#
 
-print("Training Model...")
+logger.info("Loading tinyTransformer model.")
 model = tinyTransformer(config, tokenizer)
 m = model.to(config.device)
 
 # compile the model
 if config.compile:
-    print("Compiling the model for faster training and inference")
+    logger.info("Compiling the model for faster training and inference.")
     model = torch.compile(model)  # requires PyTorch 2.0!
+else:
+    logger.debug("Using non-compiled model.")
 
 # Create an Adam Optimizer
+logger.info("Setting optimiser with exponential learning-rate decay scheduler.")
 optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.5)
 
@@ -129,6 +139,12 @@ def estimate_loss():
     return out
 
 
+precision = (
+    nullcontext()
+    if config.device == "cpu"
+    else torch.amp.autocast(device_type=config.device, dtype=config.model_precision)
+)
+
 # Run our training epochs
 for epoch in range(config.epochs):
     # Run each training step per epoch
@@ -136,12 +152,12 @@ for epoch in range(config.epochs):
         # Every once in a while evaluate the loss on train and val sets
         if iter % config.eval_interval == 0:
             losses = estimate_loss()
-            print(
+            logger.info(
                 f"-epoch: {epoch}- step: {iter} | train loss {losses['train']:.4f}, val loss {losses['val']:.4f}\n\n"
             )
             context = torch.zeros((1, 1), dtype=torch.long, device=config.device)
-            print(f"Generative output at step {iter}:")
-            print(
+            logger.info(f"Generative output at step {iter}:")
+            logger.info(
                 tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist())
                 + "\n\n"
             )
@@ -150,7 +166,7 @@ for epoch in range(config.epochs):
         xb, yb = get_batch("train")
 
         # evaluate the loss
-        with config.precision:
+        with precision:
             logits, loss = model(xb, yb)
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -166,8 +182,9 @@ for epoch in range(config.epochs):
             "optimizer": optimizer.state_dict(),
             "config": config,
         }
-        print(f"saving checkpoint to {config.out_dir}")
-        torch.save(checkpoint, os.path.join(config.out_dir, get_savefile_name(epoch)))
+        checkpoint_name = get_savefile_name(epoch)
+        logger.info(f"saving checkpoint to {config.out_dir}")
+        torch.save(checkpoint, os.path.join(config.out_dir, checkpoint_name))
 
 
 # -----------------------------------------------------------------------------------#
@@ -179,10 +196,10 @@ torch.save(m.state_dict(), "./models/tinyTransformer1.0.torch")
 # -----------------------------------------------------------------------------------#
 #                                   Run the model                                    #
 # -----------------------------------------------------------------------------------#
-print("Finished training...")
-print("Generative output after training:")
+logger.info("Finished training...")
+logger.info("Generative output after training:")
 context = torch.zeros((1, 1), dtype=torch.long, device=config.device)
-print(tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist()))
+logger.info(tokenizer.decode(m.generate(context, max_new_tokens=100)[0].tolist()))
 
 
 def prompt(input):
@@ -192,4 +209,4 @@ def prompt(input):
     context = torch.tensor(
         tokenizer.encode(input), dtype=torch.long, device=config.device
     ).reshape(1, -1)
-    print(tokenizer.decode(m.generate(context, max_new_tokens=256)[0].tolist()))
+    logger.info(tokenizer.decode(m.generate(context, max_new_tokens=256)[0].tolist()))

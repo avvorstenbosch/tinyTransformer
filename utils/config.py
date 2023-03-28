@@ -21,7 +21,6 @@ class Config:
         testrun=False,  # Do you want to test the code on a small dataset?
         out_dir="./models/",  # Where do you want the output to go?
         device="cuda" if torch.cuda.is_available() else "cpu",  # Where will we train?
-        precision=None,  # How do you want to set the precision of the model: Either float32 or bfloat16
         dropout_percentage=0.2,  # How do you want to set the dropout rate?
         compute_layer_scaling=2,  # With what factor do you want the FF-compute layer to scale?
     ):
@@ -42,10 +41,5 @@ class Config:
         self.testrun = testrun
         self.out_dir = out_dir
         self.device = device
-        self.precision = (
-            nullcontext()
-            if device == "cpu"
-            else torch.amp.autocast(device_type=device, dtype=model_precision)
-        )
         self.dropout_percentage = dropout_percentage
         self.compute_layer_scaling = compute_layer_scaling
