@@ -23,11 +23,12 @@ class Config:
         device="cuda" if torch.cuda.is_available() else "cpu",  # Where will we train?
         precision=None,  # How do you want to set the precision of the model: Either float32 or bfloat16
         dropout_percentage=0.2,  # How do you want to set the dropout rate?
+        compute_layer_scaling=2,  # With what factor do you want the FF-compute layer to scale?
     ):
         self.batch_size = batch_size
         self.block_size = block_size
         self.n_head = n_head
-        self.n_embed = n_embed or 32 * n_head
+        self.n_embed = n_embed or 128 * n_head
         self.head_size = self.n_embed // n_head
         self.n_blocks = n_blocks
         self.n_layers = n_layers
@@ -47,3 +48,4 @@ class Config:
             else torch.amp.autocast(device_type=device, dtype=model_precision)
         )
         self.dropout_percentage = dropout_percentage
+        self.compute_layer_scaling = compute_layer_scaling

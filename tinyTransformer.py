@@ -68,19 +68,24 @@ class FeedForward(nn.Module):
     def __init__(self, config):
         super().__init__()
         layers = [
-            nn.Linear(config.n_embed, 4 * config.n_embed),
+            nn.Linear(config.n_embed, config.compute_layer_scaling * config.n_embed),
             nn.ReLU(),
         ]
         for layer in range(config.n_layers - 1):
             layers.extend(
                 [
-                    nn.Linear(4 * config.n_embed, 4 * config.n_embed),
+                    nn.Linear(
+                        config.compute_layer_scaling * config.n_embed,
+                        config.compute_layer_scaling * config.n_embed,
+                    ),
                     nn.ReLU(),
                 ]
             )
         layers.extend(
             [
-                nn.Linear(4 * config.n_embed, config.n_embed),
+                nn.Linear(
+                    config.compute_layer_scaling * config.n_embed, config.n_embed
+                ),
                 nn.Dropout(config.dropout_percentage),
             ]
         )  # Add projection for skip-connection
