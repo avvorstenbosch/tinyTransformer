@@ -1,5 +1,4 @@
 import torch
-from contextlib import nullcontext
 
 
 class Config:
