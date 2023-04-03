@@ -12,7 +12,7 @@ LOGGING_LEVELS = {
 
 def setup_logger(name, level="INFO"):
     """
-    Set up a logger that prints logs to both the console and a file.
+    Set up the logging config to prints logs to both the console and a file.
 
     Parameters
     ----------
@@ -22,21 +22,13 @@ def setup_logger(name, level="INFO"):
         The logging level to use (default is 'INFO'). The available levels are
         'CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', and 'NOTSET'.
 
-    Returns
-    -------
-    logging.Logger
-        The logger instance that was created.
-
     Examples
     --------
     >>> from logger import setup_logger
-    >>> logger = setup_logger(level='DEBUG')
-    >>> logger.debug('This is a debug message')
+    >>> setup_logger(level='DEBUG')
     """
     # Set up the logger with a format that includes the filename and date
-    logger = logging.getLogger(name)
     level = LOGGING_LEVELS[level]
-    logger.setLevel(level)
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
@@ -45,13 +37,14 @@ def setup_logger(name, level="INFO"):
     console_handler = logging.StreamHandler()
     console_handler.setLevel(level)
     console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
 
     # Create a handler that prints logs to a file with the current filename and date
     log_filename = f"{name}.log"
     file_handler = logging.FileHandler(log_filename)
     file_handler.setLevel(level)
     file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
-    return logger
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[file_handler, console_handler],
+        level=level,
+    )

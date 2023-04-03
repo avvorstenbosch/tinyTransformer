@@ -1,3 +1,9 @@
+import logging
+from utils.logging import setup_logger
+
+setup_logger(__name__)
+logger = logging.getLogger(__name__)
+
 import os
 import pickle
 
@@ -7,11 +13,10 @@ import click
 from utils.BPE import BPETokenizer
 from utils.save import get_savefile_name
 from utils.config import Config
-from utils.logging import setup_logger
+from utils.load_data import load_data
 from tinyTransformer import tinyTransformer
 from contextlib import nullcontext
 
-logger = setup_logger(__name__)
 torch.manual_seed(2112)
 
 
@@ -45,9 +50,7 @@ def prompt(input):
     help="How many self-attention head does a multiheaded self attention block get?",
 )
 @click.option(
-    "--n_embed", 
-    default=None, 
-    help="How many dimensions do our embeddings have?"
+    "--n_embed", default=None, help="How many dimensions do our embeddings have?"
 )
 @click.option(
     "--n_blocks",
@@ -55,9 +58,7 @@ def prompt(input):
     help="How many sequential self-attention blocks does our model get?",
 )
 @click.option(
-    "--epochs", 
-    default=30, 
-    help="For how many epochs will we train the model?"
+    "--epochs", default=30, help="For how many epochs will we train the model?"
 )
 @click.option(
     "--steps_per_epoch",
@@ -69,14 +70,9 @@ def prompt(input):
     default=1000,
     help="How often will we print results for training?",
 )
+@click.option("--learning_rate", default=1e-3, help="What is our learning rate?")
 @click.option(
-    "--learning_rate", 
-    default=1e-3, 
-    help="What is our learning rate?")
-@click.option(
-    "--eval_iters", 
-    default=100, 
-    help="How many samples to use to estimate loss?"
+    "--eval_iters", default=100, help="How many samples to use to estimate loss?"
 )
 @click.option(
     "--model_precision",
@@ -89,9 +85,10 @@ def prompt(input):
     help="Do you want to compile the model in Pytorch 2.0 to be faster?",
 )
 @click.option(
-    "--testrun/--no-testrun", 
-    default=True
-    help="Do you want to do a quick testrun instead of a full run?")
+    "--testrun/--no-testrun",
+    default=True,
+    help="Do you want to do a quick testrun instead of a full run?",
+)
 @click.option(
     "--out_dir",
     default="./models/",
@@ -103,9 +100,14 @@ def prompt(input):
     help="Where will we train?",
 )
 @click.option(
-    "--dropout_percentage", 
-    default=0.3, 
+    "--dropout_percentage",
+    default=0.3,
     help="Dropout percentage for regularization.",
+)
+@click.option(
+    "--data_dir",
+    default="./data/corpus/",
+    help="Directory where dataset is located.",
 )
 def main(**kwargs):
     config = Config(**kwargs)
@@ -115,25 +117,17 @@ def main(**kwargs):
             f"{key}={str(value)}" for key, value in config.__dict__.items()
         ),
     )
-    if config.device == "cuda" & not torch.cuda.is_available():
-        logger.warning("The device preference is set to 'cuda', but no cuda device was found.")
+    if config.device == "cuda" and torch.cuda.is_available() != True:
+        logger.warning(
+            "The device preference is set to 'cuda', but no cuda device was found."
+        )
 
     # -----------------------------------------------------------------------------------#
     #                                 Load training data                                 #
     # -----------------------------------------------------------------------------------#
     logger.info("Loading the dataset for processing.")
-    # get dataset
-    paths = os.listdir("./data/maarten/")
-    files = []
-    for path in paths:
-        with open("./data/maarten/" + path, "r") as file:
-            files.append(file.read().lower())
-
-    logger.info("Concatenating dataset into a single string for easy handling.")
-    dataset = ""
-    length_dataset = len(files) if not config.testrun else 3
-    for file in files[:length_dataset]:
-        dataset += file
+    # get dataset, this function assumes that data is stored in a corpus repository with .txt files
+    dataset = load_data(config.data_dir, config.testrun)
 
     # -----------------------------------------------------------------------------------#
     #                           Process training data                                    #

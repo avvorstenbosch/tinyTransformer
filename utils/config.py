@@ -4,6 +4,7 @@ import torch
 class Config:
     def __init__(
         self,
+        data_dir="./data/corpus/",  # Where is the data stored?
         batch_size=128,  # How many independent sequences will we process in parallel?
         block_size=256,  # What is the maximum context length for predictions?
         n_head=6,  # How many self-attention head does a multiheaded self attention block get?
@@ -23,6 +24,7 @@ class Config:
         dropout_percentage=0.2,  # How do you want to set the dropout rate?
         compute_layer_scaling=2,  # With what factor do you want the FF-compute layer to scale?
     ):
+        self.data_dir = data_dir
         self.batch_size = batch_size
         self.block_size = block_size
         self.n_head = n_head
