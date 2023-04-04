@@ -1,5 +1,11 @@
 import torch
 
+dtype_dict = {
+    "float16": torch.float16,
+    "bfloat16": torch.bfloat16,
+    "float32": torch.float32,
+}
+
 
 class Config:
     def __init__(
@@ -16,7 +22,7 @@ class Config:
         eval_interval=1000,  # How often will we print results for training?
         learning_rate=1e-4,  # What is our learning rate?
         eval_iters=200,  # How many samples to use to estimate loss?
-        model_precision=torch.bfloat16,  # Do you want to set the model_precision to float16 to be faster and reduce the memory?
+        model_precision="bfloat16",  # Do you want to set the model_precision to float16 to be faster and reduce the memory?
         compile=True,  # Do you want to compile the model in Pytorch 2.0 to be faster?
         testrun=False,  # Do you want to test the code on a small dataset?
         out_dir="./models/",  # Where do you want the output to go?
@@ -37,7 +43,7 @@ class Config:
         self.eval_interval = eval_interval
         self.learning_rate = learning_rate
         self.eval_iters = eval_iters
-        self.model_precision = model_precision
+        self.model_precision = dtype_dict[model_precision]
         self.compile = compile
         self.testrun = testrun
         self.out_dir = out_dir

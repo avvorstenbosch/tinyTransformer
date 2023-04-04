@@ -7,8 +7,8 @@ logger = logging.getLogger(__name__)
 import os
 import pickle
 
-import torch
 import click
+import torch
 
 from utils.BPE import BPETokenizer
 from utils.save import get_savefile_name
@@ -76,7 +76,7 @@ def prompt(input):
 )
 @click.option(
     "--model_precision",
-    default=torch.bfloat16,
+    default="bfloat16",
     help="Do you want to run mixed_precision?",
 )
 @click.option(
@@ -208,7 +208,6 @@ def main(**kwargs):
         if config.device == "cpu"
         else torch.amp.autocast(device_type=config.device, dtype=config.model_precision)
     )
-
     # Run our training epochs
     for epoch in range(config.epochs):
         # Run each training step per epoch
