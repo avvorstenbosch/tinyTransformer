@@ -16,6 +16,9 @@ from utils.config import Config
 from utils.load_data import load_data
 from tinyTransformer import tinyTransformer
 from contextlib import nullcontext
+from torch.utils.tensorboard import SummaryWriter
+
+TensorboardWriter = SummaryWriter()
 
 torch.manual_seed(2112)
 
@@ -41,20 +44,23 @@ def prompt(input):
 )
 @click.option(
     "--block_size",
-    default=512,
+    default=256,
     help="What is the maximum context length for predictions?",
 )
 @click.option(
     "--n_head",
-    default=4,
+    default=6,
     help="How many self-attention head does a multiheaded self attention block get?",
 )
 @click.option(
-    "--n_embed", default=None, help="How many dimensions do our embeddings have?"
+    "--n_embed",
+    default=None,
+    help="How many dimensions do our embeddings have?",
+    type=int,
 )
 @click.option(
     "--n_blocks",
-    default=6,
+    default=3,
     help="How many sequential self-attention blocks does our model get?",
 )
 @click.option(
@@ -62,17 +68,17 @@ def prompt(input):
 )
 @click.option(
     "--steps_per_epoch",
-    default=10000,
+    default=1000,
     help="How many training steps will we take per Epoch?",
 )
 @click.option(
     "--eval_interval",
-    default=1000,
+    default=100,
     help="How often will we print results for training?",
 )
-@click.option("--learning_rate", default=1e-3, help="What is our learning rate?")
+@click.option("--learning_rate", default=1e-4, help="What is our learning rate?")
 @click.option(
-    "--eval_iters", default=100, help="How many samples to use to estimate loss?"
+    "--eval_iters", default=10, help="How many samples to use to estimate loss?"
 )
 @click.option(
     "--model_precision",
@@ -86,7 +92,7 @@ def prompt(input):
 )
 @click.option(
     "--testrun/--no-testrun",
-    default=True,
+    default=False,
     help="Do you want to do a quick testrun instead of a full run?",
 )
 @click.option(
@@ -150,7 +156,14 @@ def main(**kwargs):
 
     logger.info("Encoding dataset with BPETokenizer.")
     # Train and test splits
-    data = torch.tensor(tokenizer.encode(dataset), dtype=torch.long)
+    tokenized_data_path = (
+        f"./data/tokenized_corpus/tokenized_data_{len(rules)}_rules.pt"
+    )
+    if os.path.exists(tokenized_data_path):
+        data = torch.load(tokenized_data_path)
+    else:
+        data = torch.tensor(tokenizer.encode(dataset), dtype=torch.long)
+        torch.save(data, tokenized_data_path)
     n = int(0.9 * len(data))  # first 90% will be train, rest val
     train_data = data[:n]
     val_data = data[n:]
@@ -218,6 +231,12 @@ def main(**kwargs):
                 logger.info(
                     f"-epoch: {epoch}- step: {iter} | train loss {losses['train']:.4f}, val loss {losses['val']:.4f}\n\n"
                 )
+                TensorboardWriter.add_scalar(
+                    "Loss/Train", losses["train"], epoch * config.steps_per_epoch + iter
+                )
+                TensorboardWriter.add_scalar(
+                    "Loss/Val", losses["val"], epoch * config.steps_per_epoch + iter
+                )
                 context = torch.zeros((1, 1), dtype=torch.long, device=config.device)
                 logger.info(f"Generative output at step {iter}:")
                 logger.info(
@@ -239,6 +258,9 @@ def main(**kwargs):
 
         # Learning-rate decay
         scheduler.step()
+
+        # Make sure that all pending events have been written to disk
+        TensorboardWriter.flush()
 
         # Save model
         if epoch > 0:
