@@ -19,9 +19,9 @@ class Config:
         n_layers=2,  # How many FF-compute layers should the end of a block have?
         epochs=30,  # For how many epochs will we train the model?
         steps_per_epoch=10000,  # How many training steps will we take per Epoch?
-        eval_interval=1000,  # How often will we print results for training?
+        eval_interval=100,  # How often will we print results for training?
         learning_rate=1e-4,  # What is our learning rate?
-        eval_iters=200,  # How many samples to use to estimate loss?
+        eval_iters=10,  # How many samples to use to estimate loss?
         model_precision="bfloat16",  # Do you want to set the model_precision to float16 to be faster and reduce the memory?
         compile=True,  # Do you want to compile the model in Pytorch 2.0 to be faster?
         testrun=False,  # Do you want to test the code on a small dataset?
@@ -34,7 +34,7 @@ class Config:
         self.batch_size = batch_size
         self.block_size = block_size
         self.n_head = n_head
-        self.n_embed = n_embed or 128 * n_head
+        self.n_embed = n_embed * n_head or 64 * n_head
         self.head_size = self.n_embed // n_head
         self.n_blocks = n_blocks
         self.n_layers = n_layers
