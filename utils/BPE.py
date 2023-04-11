@@ -4,7 +4,7 @@ from collections import defaultdict
 import pickle
 
 # Hyperparameters
-LENGTH_VOCAB = 2**10  # How long is the vocab?
+LENGTH_VOCAB = 2**14  # How long is the vocab?
 SPECTOKENS = ["<|END|>", "<|W|>", "\n"]
 # How do we find pre-tokens?
 PATTERN = "|".join(re.escape(token) for token in SPECTOKENS) + "|" + r"\b\w+\b|[^\w\s]"
@@ -90,10 +90,10 @@ class BPETokenizer:
 
 if __name__ == "__main__":
     # get dataset
-    paths = os.listdir("../data/maarten/")
+    paths = os.listdir("../data/corpus/")
     files = []
     for path in paths:
-        with open("../data/maarten/" + path, "r") as file:
+        with open("../data/corpus/" + path, "r") as file:
             text = file.read()
         text = text.lower() + " <|END|>"
         files.append(text)
