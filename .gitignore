@@ -137,3 +137,6 @@ dmypy.json
 
 # Ignore pickles
 *.pickle
+
+# Ignore Tensorboard 
+/runs/
