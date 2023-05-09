@@ -2,8 +2,8 @@
 This repository contains an implementation of a simple GPT-like transformer model that can be trained on a single consumer-grade GPU. The code mostly follows along with the videos [Let's build GPT: from scratch, in code, spelled out.](https://www.youtube.com/watch?v=kCc8FmEb1nY&t=4764s&ab_channel=AndrejKarpathy) and [Building Makemore](https://www.youtube.com/watch?v=VMj-3S1tku0&list=PLAqhIrjkxbuWI23v9cThsA9GvCAUhRvKZ&ab_channel=AndrejKarpathy) by Andrej Karpathy. Further additions are logging, checkpointing, tensorboard monitoring and a custom implementation of BytePairEncoding (BPE). The script includes functions for evaluating the model's performance during training, saving model checkpoints, and generating text using the trained model.
 
 ## Requirements
-- Python 3.9 
-- PyTorch
+- Python >= 3.9 
+- PyTorch >= 2.0
 
 ## Model Implementation
 The code is organized in the following modules:
