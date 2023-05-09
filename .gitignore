@@ -133,6 +133,10 @@ dmypy.json
 
 # Ignore pytorch models
 *.torch
+*.pt 
 
 # Ignore pickles
 *.pickle
+
+# Ignore Tensorboard 
+/runs/
